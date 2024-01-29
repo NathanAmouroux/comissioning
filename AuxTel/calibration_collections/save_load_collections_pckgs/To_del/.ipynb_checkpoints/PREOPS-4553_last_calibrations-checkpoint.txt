@@ -1,0 +1,7 @@
+LATISS/calib/DM-41633/flat-i	flat-i
+LATISS/calib/DM-40904//flat-r	flat-r
+LATISS/calib/DM-40904//flat-g	flat-g
+LATISS/calib/DM-40904//defects	defects
+LATISS/calib/DM-40904//dark	dark
+LATISS/calib/DM-40904//bias	bias
+LATISS/calib/DM-39505/crosstalk.20230602	crosstalk

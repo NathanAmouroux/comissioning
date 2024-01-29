@@ -1,0 +1,6 @@
+LATISS/calib/DM-39505/crosstalk.20230602	crosstalk
+LATISS/calib/DM-38946/noRGseq/flat-r.20230503	flat-r
+LATISS/calib/DM-38946/noRGseq/flat-i.20230503	flat-i
+LATISS/calib/DM-38946/noRGseq/flat-g.20230503	flat-g
+LATISS/calib/DM-38946/noRGseq/dark.20230503	dark
+LATISS/calib/DM-38946/noRGseq/bias.20230503	bias
