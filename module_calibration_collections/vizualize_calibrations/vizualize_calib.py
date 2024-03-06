@@ -122,9 +122,10 @@ class vizualize:
                 figure = self.plot_calib(collection, calib, exp, is_chained, detector, range=(vmin,vmax),fig = fig, ax=ax_l[i-count], outpath=outpath, inpath=inpath, savefig = False)
                 calib_found.append(calib)
             except:
+                print(f"Exception encountered, {calib} not found.") 
                 count += 1
                 figure.delaxes(ax_l[-1*count])
-                print(f"Exception encountered, {calib} not found.")        
+                       
      
         if outpath == None : 
             if not os.path.exists(self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{collection.split('/')[-1]}/"):
