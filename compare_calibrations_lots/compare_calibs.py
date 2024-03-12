@@ -7,25 +7,31 @@ from matplotlib.patches import Rectangle
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import pickle
 import sys
-
-collections = ["LATISS/runs/AUXTEL_DRP_IMAGING_2023-11A-10A-09AB-08ABC-07AB-05AB/w_2023_46/PREOPS-4553", "LATISS/runs/AUXTEL_DRP_IMAGING_2023-09A-08ABC-07AB-05AB/d_2023_09_25/PREOPS-3780"]
+import os
+sys.path.append('../save_calibrations_data/')
+import find_by_chain
  
 class comparison:
-    def __init__(self):
+    def __init__(self, collections=[None, None], detector = 0, repo = 'embargo', exp = 'LATISS', is_chained = True):
         self.config = ConfigParser()
         self.config.read("/sdf/data/rubin/user/amouroux/comissioning/module_calibration_collections/config.ini")
-        self.repo = self.config.get('base', repo + '_repo')
+        self.repo = repo
+        self.repo_path = self.config.get('base', repo + '_repo')
+        self.detector = detector
+        self.collections = collections
+        self.exp = exp
+        self.is_chained = is_chained
 
-    def open_calib(self, collection, exp, calib, is_chained, detector, inpath = None):
-        if inpath == None:
-            inpath = self.config.get(self.exp, 'base_save_path') + 'saved_collections/datas/' + f"{self.collection.split('/')[-1]}/"
-        if os.path.exists(inpath + f"{calib}_{detector}_data.pkl"):
-            inpath += f"{calib}_{detector}_data.pkl"
-            with open(inpath, 'rb') as file:
-                calib_arr = pickle.load(file)
+    def open_calibs(self, collection, calib, inpath = None):
+        if inpath is None:
+            inpath = self.config.get(self.exp, 'base_save_path') + 'saved_collections/datas/' + f"{collection.split('/')[-1]}/"
+            if os.path.exists(inpath + f"{calib}_{self.detector}_data.pkl"):
+                inpath += f"{calib}_{self.detector}_data.pkl"
+                with open(inpath, 'rb') as file:
+                    calib_arr = pickle.load(file)
         else : 
-            datas = save_datasets.datas()
-            calib_arr = datas.save_calibration_data(collection, exp, calib, is_chained, detector, outpath = inpath)
+            datas = find_by_chain.Data(collection=collection, calib = calib, detector = self.detector, repo = self.repo, exp = self.exp, is_chained = self.is_chained)
+            calib_arr = datas.save_calibration_data(outpath = inpath)
         return calib_arr
         
         
@@ -39,10 +45,11 @@ class comparison:
         return amps
 
     def amps_to_ccd(self, data):
+        x_size, y_size = 509, 2000
         ccd = np.zeros((4000,4072))
         for i in range(2):#=16
             for j in range(8):
-                ccd[i*2000:(i+1)*y_size, j*x_size:(j+1)*x_size] = amps_value[(i+1)*j]
+                ccd[i*2000:(i+1)*y_size, j*x_size:(j+1)*x_size] = data[(i+1)*j]
         return ccd
     
     def mean(self, data): #Used for meaning inside amp
@@ -73,14 +80,14 @@ class comparison:
         diff_r = diff/self.image_mean_by_amp(data1)
         return diff_r
 
-    def save_ops(self, collections, exp, calibs, is_chained=True, detector=0, operations="difference", inpath = None, save = True): #operation must be a list
-        ops : {"calib" = [], "operation" = [], "data"=[]}        
+    def save_ops(self, calibs, operations="difference", inpath = None, save = True): #operation must be a list
+        ops = {'calibs' : [[] for i in range(len(calibs))], "operation" :[[] for i in range(len(calibs))], "data":[[] for i in range(len(calibs))]}    
         for i, calib in enumerate(calibs):
             data = []
             count=0
-            for collection in range(collections):   
+            for collection in range(self.collections):   
                 try:
-                    curr_data = self.open_calib(collection, exp, calib, is_chained, detector, inpath = inpath)
+                    curr_data = self.open_calibs(collection, calib, inpath = inpath)
                     data.append(curr_data)
                 except:
                     print(f"{calib} doesn't exist in coll {collection}.")
@@ -101,14 +108,14 @@ class comparison:
                     outpath = self.config.get(self.exp, 'base_save_path') + 'compared_collections/datas/' + f"{self.collections[0].split('/')[-1]}-{self.collections[1].split('/')[-1]}/"
                     if not os.path.exists(outpath):
                         os.mkdir(outpath)
-                    with open(outpath+f"{calib}_{detector}_{operations[i]}_data.pkl", 'wb') as file:
-                        pickle.dump(ops, file)
+                    with open(outpath+f"{calib}_{self.detector}_{operations[i]}_data.pkl", 'wb') as file:
+                        pickle.dump(ops[i], file)
         return ops
 
     
 
-"""    
-inpath = "/sdf/home/a/amouroux/rubin-user/comissioning/AuxTel/calibration_collections/save_load_collections_pckgs/"
+   
+"""inpath = "/sdf/home/a/amouroux/rubin-user/comissioning/AuxTel/calibration_collections/save_load_collections_pckgs/"
 calibs = []
 for i in range(2):
     with open(inpath + f"{collections[i].split('/')[-1]}_data_calibration.pkl", 'rb') as fichier:
@@ -186,8 +193,7 @@ for j, operation in enumerate(ops): #For diff + frac
             axs[i][j].set_title(calib_diff['calib_type'][i])
         else:
             print("crosstalk!")
-            """
-"""            im = axs[i][j].imshow(calib_diff[operation][j][i], vmin = vmin, vmax = vmax)
+        im = axs[i][j].imshow(calib_diff[operation][j][i], vmin = vmin, vmax = vmax)
             axs[i][j].set_title('crosstalk')
             divider = make_axes_locatable(axs[i][j])
             cax = divider.append_axes('right', size='5%', pad=0.05)
@@ -197,8 +203,8 @@ for j, operation in enumerate(ops): #For diff + frac
             axs[i][j].set_yticks(ticks = ticks, labels = amp_l, fontsize = 9)
             axs[i][j].set_xlabel("Victim amplifier")
             axs[i][j].set_ylabel("Source amplifier")
-            fig.colorbar(im, cax=cax, orientation='vertical')"""
-            """
+            fig.colorbar(im, cax=cax, orientation='vertical')
+            
 fig.suptitle((collections[0].split('/')[-1] + "_vs_" + collections[1].split('/')[-1]), fontsize = 16)
 #fig.subplots_adjust(hspace=0.50)
 fig.tight_layout()

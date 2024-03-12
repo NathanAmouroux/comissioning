@@ -11,49 +11,44 @@ import os
 import pickle
 from configparser import ConfigParser
 sys.path.append('/sdf/data/rubin/user/amouroux/comissioning/module_calibration_collections/save_calibrations_data')
-import save_datasets
+import save_dataset
 
 class vizualize:
-    def __init__(self, collection=None, calib = 'flat', repo = 'embargo', exp = 'LATISS', is_chained = True):
+    def __init__(self, collection=None, detector = 0, repo = 'embargo', exp = 'LATISS', is_chained = True):
         self.config = ConfigParser()
         self.config.read("/sdf/data/rubin/user/amouroux/comissioning/module_calibration_collections/config.ini")
         self.repo = self.config.get('base', repo + '_repo')
+        self.detector = detector
         self.collection = collection
         self.exp = exp
-        self.calib = calib
         self.is_chained = is_chained
         #self.outpath = config.get(self.exp, 'base_save_path') + 'saved_collections/paths/' + f"{self.collection.split('/')[-1]}"
 
-    def open_calib(self, collection, exp, calib, is_chained, detector, inpath = None):
+    def open_calib(self, calib, inpath = None):
         if inpath == None:
             inpath = self.config.get(self.exp, 'base_save_path') + 'saved_collections/datas/' + f"{self.collection.split('/')[-1]}/"
-        if os.path.exists(self.config.get(self.exp, 'base_save_path') + 'saved_collections/datas/' + f"{self.collection.split('/')[-1]}/{calib}_{detector}_data.pkl"):
-            inpath = self.config.get(self.exp, 'base_save_path') + 'saved_collections/datas/' + f"{self.collection.split('/')[-1]}/{calib}_{detector}_data.pkl"
+        if os.path.exists(self.config.get(self.exp, 'base_save_path') + 'saved_collections/datas/' + f"{self.collection.split('/')[-1]}/{calib}_{self.detector}_data.pkl"):
+            inpath = self.config.get(self.exp, 'base_save_path') + 'saved_collections/datas/' + f"{self.collection.split('/')[-1]}/{calib}_{self.detector}_data.pkl"
             with open(inpath, 'rb') as file:
                 calib_arr = pickle.load(file)
         else : 
-            datas = save_datasets.datas()
-            calib_arr = datas.save_calibration_data(collection, exp, calib, is_chained, detector, outpath = inpath)
+            datas = save_dataset.Data(collection=self.collection, exp=self.exp, calib=calib, is_chained=self.is_chained, detector=self.detector)
+            calib_arr = datas.save_calibration_data(outpath = inpath)
         return calib_arr
 
     def make_error_boxes(self, ax, xdata, ydata, xerror, yerror, facecolor='k', edgecolor='none', alpha=1):
         ## This function just draws in boxes in the shapes of the defects.
-    
         # Loop over data points; create box from errors at each point
         errorboxes = [Rectangle((x, y), xe, ye, rotation_point='center')
                       for x, y, xe, ye in zip(xdata, ydata, xerror, yerror)]
-    
         # Create patch collection with specified colour/alpha
         pc = PatchCollection(errorboxes, facecolor=facecolor, alpha=alpha,
                              edgecolor=edgecolor)
-    
         # Add collection to axes
         ax.add_collection(pc)
-    
         # Plot errorbars
         artists = ax.errorbar(xdata+0.5*xerror, ydata+0.5*yerror, xerr=0.5*xerror, yerr=0.5*yerror,
                               fmt='none', ecolor='k')
-    
         return artists 
 
     def plot_array(self, data, vmin, vmax, calib, fig, ax):
@@ -64,6 +59,7 @@ class vizualize:
         fig.colorbar(im, ax=ax, orientation='vertical', fraction=0.046, pad=0.04)
         ax.set_title(calib, fontsize = 13)
         return fig
+    
     def plot_defects(self, data, fig, ax):
         im = self.make_error_boxes(ax, data['x0'], data['y0'], data['width'], data['height'])
         [ax.axhline(l, lw=0.1, c='k') for l in np.linspace(0,4000,3)]
@@ -73,6 +69,7 @@ class vizualize:
         ax.set_aspect('equal')
         ax.set_title("defects", fontsize = 13)
         return fig
+    
     def plot_crosstalk(self, data, vmin, vmax, fig, ax):
         im = ax.imshow(data, vmin = vmin, vmax = vmax)
         ax.set_title('crosstalk', fontsize = 13)
@@ -85,30 +82,30 @@ class vizualize:
         fig.colorbar(im, ax=ax, orientation='vertical', fraction=0.046, pad=0.04)
         return fig
     
-    def plot_calib(self, collection, calib, exp="LATISS", is_chained=True, detector=0, range = None, fig = None, ax = None, inpath = None, outpath = None, savefig = True):
-        calib_arr = self.open_calib(collection, exp, calib, is_chained, detector, inpath = inpath)
-        if ax == None : 
+    def plot_calib(self, calib, range = None, fig = None, ax = None, inpath = None, savefig = True, outpath = None):
+        calib_arr = self.open_calib(calib=calib, inpath = inpath)
+        if ax is None : 
             fig, ax = plt.subplots(figsize = (7,7))
-        if range == None :
+        if range is None :
             range_dict = {"calib_type" : ["flat", "defects", "dark", "bias", "crosstalk"], "range" : [(0.9,1.1), (0,1), (-0.1,0.1), (-4,4), (0,0.0005)]} #For plotting
             vmin, vmax = range_dict["range"][range_dict["calib_type"].index(calib.split('-')[0])]
         else :
             vmin, vmax = range
-        if calib.split("-")[0] =="flat" or calib =="dark" or calib == "bias":
+        if calib.split("-")[0] == "flat" or calib == "dark" or calib == "bias":
             figure = self.plot_array(calib_arr, vmin, vmax, calib, fig, ax)
         elif calib == "defects":
             figure = self.plot_defects(calib_arr, fig, ax)
         elif calib == "crosstalk":
             figure = self.plot_crosstalk(calib_arr, vmin, vmax, fig, ax)
         if savefig == True:
-            if outpath == None : 
-                if not os.path.exists(self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{collection.split('/')[-1]}/"):
-                    os.mkdir(self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{collection.split('/')[-1]}/")
-                outpath = self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{collection.split('/')[-1]}/"
-            figure.savefig(outpath + f"{calib}_{detector}_plot.png", bbox_inches='tight')
+            if outpath is None : 
+                if not os.path.exists(self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{self.collection.split('/')[-1]}/"):
+                    os.mkdir(self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{self.collection.split('/')[-1]}/")
+                outpath = self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{self.collection.split('/')[-1]}/"
+            figure.savefig(outpath + f"{calib}_{self.detector}_plot.png", bbox_inches='tight')
         return figure
 
-    def plot_multiple_calibs(self, collection, calibs, exp = "LATISS", is_chained=True, detector=0, range = None, outpath = None, inpath = None):
+    def plot_multiple_calibs(self, calibs, range = None, inpath = None, savefig = True, outpath = None):
         n_lines = round(len(calibs)/2)
         fig, axs = plt.subplots(n_lines,2,figsize=(15,7*n_lines))
         ax_l = [ax for ax in axs.flat]
@@ -119,32 +116,30 @@ class vizualize:
         for i, calib in enumerate(calibs):   #Plot multiple calibs on same figure
             vmin, vmax = range[i][0], range[i][1]
             try :
-                figure = self.plot_calib(collection, calib, exp, is_chained, detector, range=(vmin,vmax),fig = fig, ax=ax_l[i-count], outpath=outpath, inpath=inpath, savefig = False)
+                figure = self.plot_calib(calib, range=(vmin,vmax),fig = fig, ax=ax_l[i-count], inpath=inpath, savefig = False, outpath=outpath)
                 calib_found.append(calib)
             except:
                 print(f"Exception encountered, {calib} not found.") 
                 count += 1
                 figure.delaxes(ax_l[-1*count])
-                       
-     
         if outpath == None : 
-            if not os.path.exists(self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{collection.split('/')[-1]}/"):
-                os.mkdir(self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{collection.split('/')[-1]}/")
-            outpath = self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{collection.split('/')[-1]}/"
+            if not os.path.exists(self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{self.collection.split('/')[-1]}/"):
+                os.mkdir(self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{self.collection.split('/')[-1]}/")
+            outpath = self.config.get(self.exp, 'base_save_path') + 'saved_collections/figures/' + f"{self.collection.split('/')[-1]}/"
         if len(calibs)%2 !=0:
             figure.delaxes(ax_l[-1-count])
-        fig.suptitle(collection, fontsize = 16)
+        fig.suptitle(self.collection, fontsize = 16)
         #fig.subplots_adjust(hspace=0.50)
         fig.tight_layout()
         fig.subplots_adjust(top=0.95)
         if len(calib_found)>=5:
             calib_found = "lot"
-        fig.savefig(outpath + f"{calib_found}_{detector}_plot.png", bbox_inches='tight')    
+        fig.savefig(outpath + f"{calib_found}_{self.detector}_plot.png", bbox_inches='tight')    
         return fig
         
-    def plot_calib_lot(self, collection, exp = "LATISS", is_chained=True, detector=0, range = None, outpath = None, inpath = None):
+    def plot_calib_lot(self, range = None, inpath = None, savefig = True, outpath = None):
         calibs = ["flat-i", "flat-z", "flat-y", "flat-g", "flat-r", "flat-u", "bias", "defects", "dark", "crosstalk"]
-        fig = self.plot_multiple_calibs(collection, calibs = calibs,  exp = exp, is_chained=is_chained, detector=detector, range = range, outpath = outpath, inpath = inpath)
+        fig = self.plot_multiple_calibs(calibs = calibs, range = range, inpath = inpath, savefig = savefig, outpath = outpath)
 
 """
 Not finished, still to implement raft vizualisation"""
